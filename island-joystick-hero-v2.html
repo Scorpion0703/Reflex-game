@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Island Hero • v2 (Items • Partikel • Bat • Natur)</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#86c98c;touch-action:none;overscroll-behavior:none;font-family:system-ui}
+  canvas{display:block;width:100%;height:100%}
+  /* Floating Joystick */
+  #joyBase,#joyKnob{position:fixed;border-radius:50%;pointer-events:none;z-index:15;opacity:0;transition:opacity .08s}
+  #joyBase{width:160px;height:160px;border:2px solid rgba(124,248,255,.45);background:rgba(124,248,255,.10);backdrop-filter:blur(6px);transform:translate(-50%,-50%)}
+  #joyKnob{width:90px;height:90px;border:2px solid rgba(124,248,255,.9);background:rgba(124,248,255,.28);backdrop-filter:blur(8px);transform:translate(-50%,-50%)}
+  #hud{position:fixed;left:10px;top:10px;z-index:20;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:6px 10px;border-radius:10px;backdrop-filter:blur(8px);font-size:14px}
+  #score{font-weight:700}
+  #jump{position:fixed;right:18px;bottom:18px;width:74px;height:74px;border-radius:50%;display:grid;place-items:center;
+        background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#eaf2ff;font-weight:800;user-select:none;z-index:16}
+  @media (pointer:fine){ #jump{display:none} }
+</style>
+</head>
+<body>
+<div id="hud">🟡 <span id="score">0</span> • Links: Joystick • Rechts: Kamera • <span id="hint">lade Modell…</span></div>
+<div id="joyBase"></div><div id="joyKnob"></div>
+<div id="jump">⤴︎</div>
+<canvas id="c"></canvas>
+
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import {OrbitControls} from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+import {GLTFLoader} from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+
+/* ---------- Renderer & Scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x86c98c);
+
+/* Lights */
+scene.add(new THREE.HemisphereLight(0xc9f7ff, 0x316644, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.0); sun.position.set(12,18,10);
+scene.add(sun);
+
+/* Camera + Controls */
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 800);
+camera.position.set(0,7,18);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0,1.5,0);
+controls.maxPolarAngle = Math.PI*0.49;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+/* Ground (rund) */
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(120, 96),
+  new THREE.MeshStandardMaterial({color:0x78bd70, roughness:0.95, metalness:0})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+/* ☁️ Wolken (sanfte Kugeln) */
+const clouds = [];
+const cloudMat = new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.9, metalness:0});
+for(let i=0;i<10;i++){
+  const g = new THREE.Group();
+  const p = new THREE.Mesh(new THREE.SphereGeometry(3+Math.random()*2, 12, 12), cloudMat);
+  const p2= new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*2, 12, 12), cloudMat);
+  const p3= new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*2, 12, 12), cloudMat);
+  p2.position.x=3; p3.position.x=-3; [p,p2,p3].forEach(m=>g.add(m));
+  g.position.set((Math.random()*2-1)*80, 18+Math.random()*8, (Math.random()*2-1)*80);
+  g.userData.speed = 0.2 + Math.random()*0.3;
+  scene.add(g); clouds.push(g);
+}
+
+/* 🌳🌼🌿 Natur (prozedural) */
+const rnd = (a,b)=> a + Math.random()*(b-a);
+const nature = new THREE.Group(); scene.add(nature);
+
+function addTree(x,z){
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,3,8), new THREE.MeshStandardMaterial({color:0x8d5a3b}));
+  trunk.position.set(x,1.5,z);
+  const crown = new THREE.Mesh(new THREE.SphereGeometry(2.2,18,18), new THREE.MeshStandardMaterial({color:0x2f8136, roughness:0.8}));
+  crown.position.set(x,3.4,z);
+  nature.add(trunk,crown);
+}
+function addFlower(x,z){
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.5,6), new THREE.MeshStandardMaterial({color:0x2e8b57}));
+  stem.position.set(x,0.25,z);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18,10,10), new THREE.MeshStandardMaterial({color:Math.random()<.5?0xff7eb6:0xffe066}));
+  head.position.set(x,0.55,z);
+  nature.add(stem, head);
+}
+function addGrass(x,z){
+  const mat = new THREE.MeshStandardMaterial({color:0x59a868, roughness:0.9});
+  for(let i=0;i<3;i++){
+    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.6, 6), mat);
+    blade.position.set(x+rnd(-0.2,0.2), 0.3, z+rnd(-0.2,0.2));
+    blade.rotation.z = rnd(-0.4,0.4);
+    nature.add(blade);
+  }
+}
+for(let i=0;i<30;i++) addTree(rnd(-90,90), rnd(-90,90));
+for(let i=0;i<100;i++) addFlower(rnd(-90,90), rnd(-90,90));
+for(let i=0;i<160;i++) addGrass(rnd(-100,100), rnd(-100,100));
+
+/* 🟡 Items (Coins + Holz) */
+const items = [];
+const coinGeo = new THREE.TorusGeometry(0.6,0.2,16,32);
+const coinMat = new THREE.MeshStandardMaterial({color:0xffd250, emissive:0x7a4a00, emissiveIntensity:0.6});
+const woodGeo = new THREE.BoxGeometry(0.3,0.3,1.2);
+const woodMat = new THREE.MeshStandardMaterial({color:0x8d5a3b, roughness:0.8});
+
+for(let i=0;i<24;i++){
+  const coin = new THREE.Mesh(coinGeo, coinMat);
+  coin.position.set(rnd(-90,90), 1, rnd(-90,90));
+  coin.userData.type='coin'; coin.userData.rot= (Math.random()*2-1)*2;
+  scene.add(coin); items.push(coin);
+}
+for(let i=0;i<14;i++){
+  const wood = new THREE.Mesh(woodGeo, woodMat);
+  wood.position.set(rnd(-90,90), 0.15, rnd(-90,90));
+  wood.rotation.y = Math.random()*Math.PI;
+  wood.userData.type='wood';
+  scene.add(wood); items.push(wood);
+}
+
+/* ✨ Partikel-System (einfache Funken) */
+const sparks = [];
+function spawnSparks(pos, color=0xffd250, n=24){
+  for(let i=0;i<n;i++){
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.06,8,8),
+      new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.8, metalness:0, roughness:1}));
+    p.position.copy(pos);
+    p.userData.vx = (Math.random()*2-1)*3;
+    p.userData.vy = (Math.random()*2)*3;
+    p.userData.vz = (Math.random()*2-1)*3;
+    p.userData.life = 0.7+Math.random()*0.4;
+    scene.add(p); sparks.push(p);
+  }
+}
+
+/* 🔊 Sounds (WebAudio, leichtgewichtig) */
+let AC=null; function audio(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function bleep(freq=440, type='sine', dur=0.15, vol=0.15){
+  try{
+    const ctx=audio(); const t0=ctx.currentTime;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination);
+    g.gain.value=0.0001;
+    g.gain.exponentialRampToValueAtTime(vol, t0+.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    o.start(t0); o.stop(t0+dur+.02);
+  }catch{}
+}
+function sfx(kind){
+  if(kind==='start'){ bleep(440,'sine', .2,.2); bleep(660,'sine', .18,.12); }
+  if(kind==='ready'){ bleep(740,'triangle', .12,.16); }
+  if(kind==='coin'){  bleep(900,'square', .08,.2); bleep(1200,'sine', .09,.12); }
+  if(kind==='wood'){  bleep(300,'triangle', .12,.18); }
+  if(kind==='step'){  bleep(180,'sawtooth', .05,.05); }
+}
+
+/* ---------- Hero mit echten Animationen ---------- */
+const loader = new GLTFLoader();
+const MODEL_URL = "https://threejs.org/examples/models/gltf/Soldier.glb";
+let hero, mixer, actions={}, activeAction=null, rightHand=null;
+
+loader.load(MODEL_URL, (gltf)=>{
+  hero = gltf.scene; hero.position.set(0,0,0); scene.add(hero);
+  mixer = new THREE.AnimationMixer(hero);
+  gltf.animations.forEach(clip=> actions[clip.name] = mixer.clipAction(clip));
+  play('Idle', 0);
+  // rechte Hand-Bone suchen
+  hero.traverse(o=>{
+    if(o.isBone){
+      const n = o.name.toLowerCase();
+      if(n.includes('hand') && (n.includes('r') || n.includes('right'))) rightHand = o;
+    }
+  });
+  attachBat();
+  document.getElementById('hint').textContent = 'bereit';
+  sfx('start'); setTimeout(()=>sfx('ready'),120);
+}, undefined, (err)=>{ console.warn('Model load error', err); document.getElementById('hint').textContent='Modell Fehler'; });
+
+function play(name, fade=0.2){
+  if(!actions[name]) return;
+  const next = actions[name];
+  if(activeAction !== next){
+    next.reset().play();
+    if(activeAction) activeAction.crossFadeTo(next, fade, false);
+    activeAction = next;
+  }
+}
+
+/* 🦾 Baseballschläger an die rechte Hand */
+let bat=null;
+function attachBat(){
+  if(!rightHand){ console.warn('Right hand bone not found, attaching bat to hero root'); }
+  const handle = new THREE.CylinderGeometry(0.08,0.1,1.0,12);
+  const head   = new THREE.CylinderGeometry(0.25,0.12,0.9,14);
+  const matH   = new THREE.MeshStandardMaterial({color:0xc7a27a, roughness:0.7});
+  const matHd  = new THREE.MeshStandardMaterial({color:0x9b5b2c, roughness:0.6});
+  const g = new THREE.Group();
+  const m1 = new THREE.Mesh(handle, matH);
+  const m2 = new THREE.Mesh(head,   matHd);
+  m1.position.y = -0.5;
+  m2.position.y = +0.5;
+  g.add(m1,m2);
+  g.scale.set(0.9,0.9,0.9);
+  bat = g;
+  const parent = rightHand || hero;
+  parent.add(g);
+  g.position.set(0, -0.05, 0.12); // kleine Justierung zur Hand
+  g.rotation.set(Math.PI/2, 0, 0);
+}
+
+/* ---------- Input: Joystick + Keyboard ---------- */
+const keys = {};
+addEventListener('keydown', e=>{ keys[e.code]=true; if(e.code==='Space') wantJump=true; });
+addEventListener('keyup',   e=> keys[e.code]=false);
+
+/* Floating Joystick */
+const JOY_MAX = 70;
+const joyBase = document.getElementById('joyBase');
+const joyKnob = document.getElementById('joyKnob');
+let joyActive=false, joyId=null, joyCX=0, joyCY=0;
+let jx=0, jy=0; // -1..1
+function showJoy(x,y){ joyBase.style.left=x+'px'; joyBase.style.top=y+'px'; joyKnob.style.left=x+'px'; joyKnob.style.top=y+'px'; joyBase.style.opacity=1; joyKnob.style.opacity=1; }
+function hideJoy(){ joyBase.style.opacity=0; joyKnob.style.opacity=0; }
+function setJoyVector(cx,cy,x,y){
+  const dx=x-cx, dy=y-cy, dist=Math.hypot(dx,dy), ang=Math.atan2(dy,dx), r=Math.min(JOY_MAX, dist);
+  joyKnob.style.left=(cx+Math.cos(ang)*r)+'px';
+  joyKnob.style.top =(cy+Math.sin(ang)*r)+'px';
+  jx = (dist<8)?0:dx/JOY_MAX;
+  jy = (dist<8)?0:dy/JOY_MAX;
+}
+addEventListener('touchstart',(e)=>{
+  for(const t of e.changedTouches){
+    if(joyActive) continue;
+    if(t.clientX > innerWidth*0.6) continue; // rechts für Kamera
+    joyActive=true; joyId=t.identifier; joyCX=t.clientX; joyCY=t.clientY; showJoy(joyCX,joyCY);
+    setJoyVector(joyCX,joyCY,t.clientX,t.clientY);
+    e.preventDefault();
+  }
+},{passive:false});
+addEventListener('touchmove',(e)=>{
+  if(!joyActive) return;
+  for(const t of e.changedTouches){
+    if(t.identifier===joyId){ setJoyVector(joyCX,joyCY,t.clientX,t.clientY); e.preventDefault(); }
+  }
+},{passive:false});
+function endJoyById(id){ if(joyId!==id) return false; joyActive=false; joyId=null; jx=0; jy=0; hideJoy(); return true; }
+addEventListener('touchend',   e=>{ for(const t of e.changedTouches){ if(endJoyById(t.identifier)) e.preventDefault(); } }, {passive:false});
+addEventListener('touchcancel',e=>{ for(const t of e.changedTouches){ if(endJoyById(t.identifier)) e.preventDefault(); } }, {passive:false});
+
+/* Jump button */
+const jumpBtn = document.getElementById('jump'); let wantJump=false;
+jumpBtn.addEventListener('touchstart', ()=>{ wantJump=true; }, {passive:true});
+
+/* ---------- Movement & Anim blending ---------- */
+let vy = 0;
+const SPEED_WALK = 3.6;
+const SPEED_RUN  = 6.8;
+const ACC=40, GRAV=30, JUMP=10;
+let vx=0, vz=0, stepAccum=0;
+
+const scoreEl = document.getElementById('score');
+let score=0;
+
+function moveVectorFromInput(){
+  const forward = new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize();
+  const right   = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), forward).normalize();
+  let ax = (keys['KeyD']||keys['ArrowRight']? 1:0) - (keys['KeyA']||keys['ArrowLeft']? 1:0);
+  let az = (keys['KeyW']||keys['ArrowUp']?    1:0) - (keys['KeyS']||keys['ArrowDown']? 1:0);
+  if(joyActive){ ax = jx; az = -jy; }
+  const v = new THREE.Vector3();
+  if(ax || az){ v.addScaledVector(right, ax); v.addScaledVector(forward, az); v.normalize(); }
+  return v;
+}
+
+/* Kollisionsdistanz für Item-Pickups */
+function tryPickup(){
+  if(!hero) return;
+  const pos = hero.position;
+  for(const it of items){
+    if(!it.visible) continue;
+    const d = pos.distanceTo(it.position);
+    if(d < 1.6){
+      it.visible = false;
+      spawnSparks(it.position, it.userData.type==='coin'?0xffd250:0x8d5a3b, 28);
+      if(it.userData.type==='coin'){ score+=1; sfx('coin'); }
+      else { score+=2; sfx('wood'); }
+      scoreEl.textContent = score;
+    }
+  }
+}
+
+function update(dt){
+  // Wolken treiben
+  clouds.forEach(c=>{ c.position.x += c.userData.speed*dt; if(c.position.x>100) c.position.x=-100; });
+
+  // Partikel
+  for(let i=sparks.length-1;i>=0;i--){
+    const p=sparks[i];
+    p.userData.life -= dt;
+    if(p.userData.life<=0){ scene.remove(p); sparks.splice(i,1); continue; }
+    p.position.x += p.userData.vx*dt;
+    p.position.y += p.userData.vy*dt;
+    p.position.z += p.userData.vz*dt;
+    p.userData.vy -= 9.8*dt*0.6;
+    p.material.emissiveIntensity = Math.max(0, p.userData.life*1.2);
+  }
+
+  if(hero && mixer){
+    // Bewegung (XZ)
+    const dir = moveVectorFromInput();
+    const joyMag = Math.hypot(jx,jy);
+    const targetSpeed = (joyMag>0.7 || keys['ShiftLeft']) ? SPEED_RUN : SPEED_WALK;
+
+    const tx = dir.x * targetSpeed, tz = dir.z * targetSpeed;
+    vx += (tx - vx) * Math.min(1, ACC*dt);
+    vz += (tz - vz) * Math.min(1, ACC*dt);
+
+    hero.position.x += vx*dt;
+    hero.position.z += vz*dt;
+
+    // Schritte-Sound im Rhythmus
+    const sp = Math.hypot(vx,vz);
+    if(sp>0.6){ stepAccum += sp*dt; if(stepAccum>1){ stepAccum=0; sfx('step'); } } else stepAccum=0;
+
+    // Facing
+    if(sp>0.02){ const yaw = Math.atan2(vz, vx); hero.rotation.y = -yaw + Math.PI/2; }
+
+    // Jump/Gravity (leicht)
+    if((keys['Space'] || wantJump) && Math.abs(hero.position.y)<0.001){ vy = JUMP; wantJump=false; }
+    vy -= GRAV*dt; hero.position.y += vy*dt; if(hero.position.y<0){ hero.position.y=0; vy=0; }
+
+    // Kamera follow
+    const camTarget = new THREE.Vector3(hero.position.x+9, 7, hero.position.z+12);
+    camera.position.lerp(camTarget, 0.08);
+    controls.target.lerp(new THREE.Vector3(hero.position.x, 1.6, hero.position.z), 0.2);
+    controls.update();
+
+    // Animationen
+    mixer.update(dt);
+    if(sp < 0.2) play('Idle', 0.15);
+    else if(sp < (SPEED_WALK+SPEED_RUN)/2) play('Walk', 0.12);
+    else play('Run', 0.12);
+
+    // Pickups
+    tryPickup();
+  }
+}
+
+/* ---------- Resize ---------- */
+addEventListener('resize', ()=>{
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+});
+
+/* ---------- Loop ---------- */
+let last = performance.now();
+function loop(t){
+  const dt = Math.min(0.033, (t-last)/1000); last=t;
+  update(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop(last);
+
+/* ======= UI bits ======= */
+const hintEl = document.getElementById('hint');
+setTimeout(()=>{ if(hintEl.textContent.includes('lade')) hintEl.textContent='falls langsam lädt: kurz warten…'; }, 1500);
+
+/* ======= Ensure Audio on first tap (iOS) ======= */
+function wakeAudio(){ try{ audio().resume(); }catch{} }
+document.addEventListener('touchstart', wakeAudio, {once:true, passive:true});
+document.addEventListener('click',      wakeAudio, {once:true, passive:true});
+</script>
+</body>
+</html>
