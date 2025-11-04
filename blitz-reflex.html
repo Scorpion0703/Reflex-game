@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blitz-Reflex</title>
+<style>
+  :root {
+    --bg:#0f1220; --panel:#151a2f; --accent:#6ee7ff; --muted:#9aa4b2; --ok:#2ecc71; --warn:#ffb020; --bad:#ff5c5c;
+  }
+  * {box-sizing:border-box}
+  html,body {height:100%}
+  body {
+    margin:0; font:16px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background: radial-gradient(1200px 700px at 70% -10%, #1a1f3d 0%, var(--bg) 60%);
+    color:#e8eef7; display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .card {
+    width:min(920px,100%); background:linear-gradient(180deg,#171c34 0%, var(--panel) 100%);
+    border:1px solid #1f2747; border-radius:18px; box-shadow:0 20px 60px rgba(0,0,0,.45);
+    padding:22px; display:grid; gap:16px; grid-template-columns:320px 1fr; align-items:start;
+  }
+  h1 {margin:0 0 6px; font-size:28px; letter-spacing:.3px}
+  .sub {color:var(--muted); margin-top:-4px}
+  .controls {display:grid; gap:10px}
+  label {display:block; margin-bottom:6px; color:var(--muted); font-size:14px}
+  .row {display:flex; gap:10px; flex-wrap:wrap}
+  select,button {
+    appearance:none; border:1px solid #273157; background:#0f1430; color:#e8eef7;
+    padding:10px 12px; border-radius:12px; font-weight:600; letter-spacing:.2px;
+  }
+  button.primary {background:linear-gradient(180deg,#1d2a67,#122055); border-color:#2c3c7c}
+  button.primary:disabled {opacity:.6; cursor:not-allowed}
+  .stats {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:6px;
+  }
+  .stat {background:#0f1430; border:1px solid #1f2747; padding:10px 12px; border-radius:12px}
+  .stat b {display:block; font-size:18px; margin-bottom:2px}
+  .arena {
+    grid-column: 1 / -1; display:grid; place-items:center; background:#0e1227;
+    border:1px dashed #26305a; border-radius:16px; padding:20px; min-height:360px; position:relative;
+  }
+  .circle {
+    width:min(260px,40vmin); aspect-ratio:1; border-radius:50%;
+    display:grid; place-items:center; font-weight:800; font-size:clamp(18px,3.3vmin,24px);
+    user-select:none; cursor:pointer; transition:transform .12s ease;
+    box-shadow: inset 0 0 40px rgba(255,255,255,.05), 0 14px 36px rgba(0,0,0,.35);
+  }
+  .circle:active { transform: scale(.98) }
+  .hint {
+    position:absolute; bottom:16px; color:var(--muted); font-size:14px; text-align:center;
+  }
+  .pill {display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #2a3565; margin-left:8px; color:#b8c3d6}
+  .log {max-height:150px; overflow:auto; padding-right:6px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px}
+  .kbd {padding:.12rem .42rem; border:1px solid #2a3565; border-radius:6px; background:#0f1430; font-family:inherit}
+  a {color:var(--accent); text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div>
+      <h1>Blitz-Reflex</h1>
+      <div class="sub">Warte auf <b style="color:var(--ok)">Grün</b> und reagiere schneller als dein Gegner – oder als du selbst gestern! <span id="bestPill" class="pill" title="Deine beste Reaktionszeit">Best: –</span></div>
+      <div class="controls">
+        <div class="row">
+          <div style="flex:1">
+            <label for="mode">Modus</label>
+            <select id="mode">
+              <option value="solo">Single-Player</option>
+              <option value="duo">2-Player (A vs. L)</option>
+            </select>
+          </div>
+          <div>
+            <label for="rounds">Runden</label>
+            <select id="rounds">
+              <option>5</option><option selected>10</option><option>20</option>
+            </select>
+          </div>
+          <div>
+            <label for="fakeouts">Täuschungen</label>
+            <select id="fakeouts">
+              <option value="off">Aus</option>
+              <option value="on" selected>An</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="statRound">–/–</b><span>Runde</span></div>
+          <div class="stat"><b id="statAvg">–</b><span>Ø Reaktion</span></div>
+          <div class="stat"><b id="statScore">0</b><span>Score (Duo)</span></div>
+        </div>
+      </div>
+      <div class="stat" style="margin-top:10px">
+        <b>Log</b>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="arena" id="arena">
+      <div id="circle" class="circle" role="button" aria-label="Spielfeld"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const circle = document.getElementById('circle');
+  const hint = document.getElementById('hint');
+  const logEl = document.getElementById('log');
+  const modeSel = document.getElementById('mode');
+  const roundsSel = document.getElementById('rounds');
+  const fakeSel = document.getElementById('fakeouts');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const statRound = document.getElementById('statRound');
+  const statAvg = document.getElementById('statAvg');
+  const statScore = document.getElementById('statScore');
+  const bestPill = document.getElementById('bestPill');
+
+  const Colors = {
+    wait: '#39446f',
+    ready: '#2ecc71',
+    tooSoon: '#ff5c5c',
+    fake: '#ffb020',
+  };
+
+  let state = {
+    started:false, awaiting:false, ready:false, isFake:false,
+    tStart:0, round:0, rounds:10, mode:'solo', allowFakes:true,
+    results:[], scoreLeft:0, scoreRight:0
+  };
+
+  const fmt = ms => `${ms.toFixed(0)} ms`;
+  const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+
+  function setCircle(color, text){
+    circle.style.background = color;
+    circle.textContent = text || '';
+  }
+
+  function setHint(text){ hint.textContent = text || ''; }
+
+  function log(line){
+    const t = new Date().toLocaleTimeString();
+    const div = document.createElement('div');
+    div.textContent = `[${t}] ${line}`;
+    logEl.prepend(div);
+  }
+
+  function loadBest() {
+    const v = localStorage.getItem('br_best_ms');
+    bestPill.textContent = `Best: ${v ? fmt(Number(v)) : '–'}`;
+  }
+
+  function saveBest(ms){
+    const v = localStorage.getItem('br_best_ms');
+    if(!v || ms < Number(v)){
+      localStorage.setItem('br_best_ms', String(ms));
+      loadBest();
+    }
+  }
+
+  function updateStats(){
+    statRound.textContent = `${Math.min(state.round, state.rounds)}/${state.rounds}`;
+    const a = avg(state.results);
+    statAvg.textContent = state.results.length ? fmt(a) : '–';
+    statScore.textContent = `${state.scoreLeft} : ${state.scoreRight}`;
+  }
+
+  function reset(all=false){
+    state.started=false; state.awaiting=false; state.ready=false; state.isFake=false;
+    state.tStart=0; state.round=0; state.results=[]; state.scoreLeft=0; state.scoreRight=0;
+    setCircle(Colors.wait, 'Bereit?');
+    setHint('Wähle einen Modus und drücke Start.');
+    if(all) logEl.innerHTML='';
+    updateStats();
+  }
+
+  function nextRound(){
+    if(state.round >= state.rounds){ finish(); return; }
+    state.round++;
+    updateStats();
+    state.ready=false; state.awaiting=true; state.isFake=false;
+    setCircle(Colors.wait, 'Warten…');
+    const delay = 900 + Math.random()*1700; // 0.9–2.6s
+    const willFake = state.allowFakes && Math.random() < 0.28; // 28% Fake
+    const fakeDelay = 250 + Math.random()*350; // 250–600ms
+    setHint(state.mode==='solo' ? 'Klicke erst bei GRÜN!' : 'Drücke A (links) oder L (rechts) bei GRÜN.');
+
+    setTimeout(() => {
+      if(!state.awaiting) return;
+      if(willFake){
+        state.isFake = true;
+        setCircle(Colors.fake, 'Täuschung!');
+        beep(240);
+        setTimeout(() => {
+          if(!state.awaiting) return;
+          setCircle(Colors.wait, 'Warten…');
+          setTimeout(armReady, 500 + Math.random()*900);
+        }, fakeDelay);
+      } else {
+        armReady();
+      }
+    }, delay);
+  }
+
+  function armReady(){
+    state.ready = true; state.awaiting = true; state.isFake=false;
+    state.tStart = performance.now();
+    setCircle(Colors.ready, 'JETZT!');
+    beep(880);
+  }
+
+  function finish(){
+    state.started=false; state.awaiting=false; state.ready=false;
+    setCircle(Colors.wait, 'Fertig');
+    const a = avg(state.results);
+    if(state.mode==='solo'){
+      if(state.results.length){
+        log(`Runden beendet • Ø ${fmt(a)} • Best ${fmt(Math.min(...state.results))}`);
+      } else {
+        log('Keine gültige Messung.');
+      }
+    } else {
+      const winner = state.scoreLeft===state.scoreRight ? 'Unentschieden' :
+        (state.scoreLeft>state.scoreRight ? 'Links gewinnt!' : 'Rechts gewinnt!');
+      log(`Match Ende • Score ${state.scoreLeft}:${state.scoreRight} • ${winner}`);
+    }
+    setHint('Nochmal? Passe die Einstellungen an und drücke Start.');
+  }
+
+  // Audio: einfacher Beep
+  let audioCtx = null;
+  function beep(freq=440, dur=0.08){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.frequency.value = freq;
+      o.type = 'sine';
+      g.gain.value = 0.04;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      setTimeout(()=>{ o.stop(); }, dur*1000);
+    }catch{}
+  }
+
+  // Input handler
+  function onAction(side){ // side: 'solo' | 'L' | 'R'
+    if(!state.started) return;
+
+    // Fehlstart (zu früh, oder Fake)
+    if(state.awaiting && !state.ready || state.isFake){
+      setCircle(Colors.tooSoon, 'Zu früh!');
+      beep(140);
+      if(state.mode==='duo'){
+        // Punkt für den Gegner
+        if(side==='L') state.scoreRight++; else if(side==='R') state.scoreLeft++;
+        log(`${side==='L'?'Links':'Rechts'} Fehlstart • Punkt für ${side==='L'?'Rechts':'Links'}`);
+      } else {
+        log('Fehlstart – warte auf Grün.');
+      }
+      state.awaiting=false;
+      updateStats();
+      setTimeout(nextRound, 700);
+      return;
+    }
+
+    // Korrekt – Reaktionszeit messen
+    if(state.ready){
+      const t = performance.now() - state.tStart;
+      setCircle(Colors.wait, fmt(t));
+      beep(520);
+      if(state.mode==='duo'){
+        // nur erster gewinnt die Runde
+        if(state.awaiting){
+          if(side==='L') state.scoreLeft++; else if(side==='R') state.scoreRight++;
+          log(`${side==='L'?'Links':'Rechts'} gewinnt die Runde • ${fmt(t)}`);
+          state.awaiting=false;
+          updateStats();
+          setTimeout(nextRound, 700);
+        }
+      } else {
+        state.results.push(t);
+        saveBest(t);
+        log(`Reaktion: ${fmt(t)}`);
+        updateStats();
+        setTimeout(nextRound, 700);
+      }
+      return;
+    }
+  }
+
+  // UI events
+  circle.addEventListener('click', () => {
+    if(state.mode==='solo') onAction('solo');
+  });
+  document.addEventListener('keydown', (e) => {
+    if(state.mode!=='duo') return;
+    if(e.repeat) return;
+    if(e.key.toLowerCase()==='a') onAction('L');
+    if(e.key.toLowerCase()==='l') onAction('R');
+  });
+
+  startBtn.addEventListener('click', () => {
+    state.mode = modeSel.value;
+    state.rounds = Number(roundsSel.value);
+    state.allowFakes = fakeSel.value === 'on';
+    state.started=true; state.results=[]; state.scoreLeft=0; state.scoreRight=0; state.round=0;
+    log(`Start • Modus: ${state.mode==='solo'?'Single-Player':'2-Player'} • Runden: ${state.rounds} • Täuschungen: ${state.allowFakes?'An':'Aus'}`);
+    updateStats();
+    nextRound();
+  });
+
+  resetBtn.addEventListener('click', () => reset(true));
+  modeSel.addEventListener('change', () => {
+    setHint(modeSel.value==='solo'
+      ? 'Klicke erst bei GRÜN!'
+      : 'Drücke A (links) oder L (rechts) bei GRÜN.');
+  });
+
+  // Init
+  loadBest();
+  reset(false);
+})();
+</script>
+</body>
+</html>
