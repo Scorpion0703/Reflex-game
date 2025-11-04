@@ -1,0 +1,138 @@
+<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Neon Runner 2D • Joystick</title>
+<style>
+  html,body{margin:0;height:100%;background:#080c1a;color:#eaf2ff;font-family:system-ui}
+  #hud{position:fixed;left:10px;top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+       padding:8px 10px;border-radius:10px;backdrop-filter:blur(8px);font-size:14px;z-index:10}
+  canvas{display:block;width:100%;height:100%}
+  /* Virtual Joystick */
+  #joyBase,#joyKnob{position:fixed;border-radius:50%;pointer-events:none;z-index:9}
+  #joyBase{width:140px;height:140px;border:2px solid rgba(124,248,255,.55);background:rgba(124,248,255,.08);transform:translate(-50%,-50%);opacity:0;transition:opacity .1s}
+  #joyKnob{width:80px;height:80px;border:2px solid rgba(124,248,255,.85);background:rgba(124,248,255,.25);backdrop-filter:blur(6px);transform:translate(-50%,-50%);opacity:0;transition:opacity .1s}
+</style>
+
+<canvas id="game"></canvas>
+<div id="hud">Finger-Joystick: Tippe & ziehe links • 🔵 Player • 🟡 Coins</div>
+<div id="joyBase"></div><div id="joyKnob"></div>
+
+<script>
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W,H,px=600,py=400,vx=0,vy=0;
+const world={w:3000,h:2000};
+const keys={};  // keyboard fallback
+const coins=[...Array(40)].map(()=>({x:Math.random()*world.w,y:Math.random()*world.h,t:0,take:false}));
+
+function resize(){ W=cv.width=innerWidth*devicePixelRatio; H=cv.height=innerHeight*devicePixelRatio; }
+addEventListener('resize',resize,{passive:true}); resize();
+
+/* ---------- Virtual Joystick (floating thumbstick) ---------- */
+const joyBase=document.getElementById('joyBase');
+const joyKnob=document.getElementById('joyKnob');
+const JOY_MAX=60; // Radius in px (Bildschirm-Pixel, nicht devicePixelRatio)
+let joyActive=false, joyId=null, joyCX=0, joyCY=0; // center (clientX/Y)
+let joyX=0, joyY=0; // -1..1
+
+function showJoy(x,y){ joyBase.style.left=x+'px'; joyBase.style.top=y+'px';
+  joyKnob.style.left=x+'px'; joyKnob.style.top=y+'px';
+  joyBase.style.opacity=1; joyKnob.style.opacity=1; }
+function hideJoy(){ joyBase.style.opacity=0; joyKnob.style.opacity=0; }
+
+function setJoyVector(cx,cy, x,y){
+  const dx=x-cx, dy=y-cy;
+  const dist=Math.hypot(dx,dy);
+  const ang=Math.atan2(dy,dx);
+  const r=Math.min(JOY_MAX, dist);
+  const kx=cx+Math.cos(ang)*r, ky=cy+Math.sin(ang)*r;
+  joyKnob.style.left=kx+'px'; joyKnob.style.top=ky+'px';
+  // normierte Richtung (Y invertieren: oben = -1)
+  joyX = (dist<8)?0:(dx/Math.max(JOY_MAX,1));
+  joyY = (dist<8)?0:(dy/Math.max(JOY_MAX,1));
+}
+
+function resetJoy(){ joyX=0; joyY=0; }
+
+addEventListener('touchstart', (e)=>{
+  for (const t of e.changedTouches){
+    // nur linken Bildschirmbereich benutzen (optional)
+    if (joyActive) continue;
+    if (t.clientX > innerWidth*0.7) continue; // rechts frei lassen (Buttons/Camera, falls später)
+    joyActive=true; joyId=t.identifier; joyCX=t.clientX; joyCY=t.clientY;
+    showJoy(joyCX, joyCY);
+    setJoyVector(joyCX, joyCY, t.clientX, t.clientY);
+    e.preventDefault();
+  }
+},{passive:false});
+
+addEventListener('touchmove', (e)=>{
+  if (!joyActive) return;
+  for (const t of e.changedTouches){
+    if (t.identifier===joyId){
+      setJoyVector(joyCX, joyCY, t.clientX, t.clientY);
+      e.preventDefault();
+    }
+  }
+},{passive:false});
+
+function endJoyById(id){
+  if (joyId!==id) return false;
+  joyActive=false; joyId=null; resetJoy(); hideJoy(); return true;
+}
+addEventListener('touchend',  (e)=>{ for (const t of e.changedTouches){ if(endJoyById(t.identifier)) e.preventDefault(); } }, {passive:false});
+addEventListener('touchcancel',(e)=>{ for (const t of e.changedTouches){ if(endJoyById(t.identifier)) e.preventDefault(); } }, {passive:false});
+
+/* ---------- Input (Keyboard + Joystick) ---------- */
+addEventListener('keydown',e=>keys[e.code]=true);
+addEventListener('keyup',e=>keys[e.code]=false);
+function input(dt){
+  // Keyboard
+  let ax=(keys['KeyD']||keys['ArrowRight']?1:0)-(keys['KeyA']||keys['ArrowLeft']?1:0);
+  let ay=(keys['KeyS']||keys['ArrowDown']?1:0)-(keys['KeyW']||keys['ArrowUp']?1:0);
+  // Joystick addieren (oder ersetzten – hier add mit Priorität Joystick)
+  const jax = joyX;                 // -1 .. 1
+  const jay = joyY;                 // -1 .. 1 (unten positiv)
+  // Joystick hat Vorrang, wenn aktiv
+  if (joyActive){ ax = jax; ay = jay; }
+
+  const ACC=1400, FRI=0.86;
+  vx += ax*ACC*dt;
+  vy += ay*ACC*dt;
+  vx *= FRI; vy *= FRI;
+}
+
+function clamp(v,a,b){return v<a?a:(v>b?b:v)}
+
+function step(dt){
+  input(dt);
+  px = clamp(px + vx*dt, 0, world.w);
+  py = clamp(py + vy*dt, 0, world.h);
+
+  // camera
+  const cx = clamp(px - W/2, 0, world.w - W);
+  const cy = clamp(py - H/2, 0, world.h - H);
+
+  // draw bg grid
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle="#080c1a"; ctx.fillRect(0,0,W,H);
+  ctx.setTransform(1,0,0,1, -cx, -cy);
+
+  ctx.strokeStyle="rgba(124,248,255,.12)"; ctx.lineWidth=1;
+  for(let x=0;x<=world.w;x+=200){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,world.h);ctx.stroke()}
+  for(let y=0;y<=world.h;y+=200){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(world.w,y);ctx.stroke()}
+
+  // coins
+  coins.forEach(c=>{
+    if(c.take) return;
+    c.t+=dt; const r=12+Math.sin(c.t*4)*2;
+    if((px-c.x)**2+(py-c.y)**2<(24*24)){c.take=true;}
+    ctx.beginPath(); ctx.fillStyle="rgba(255,210,80,.9)"; ctx.arc(c.x,c.y,r,0,Math.PI*2); ctx.fill();
+  });
+
+  // player (neon)
+  ctx.beginPath(); ctx.fillStyle="#78f7ff"; ctx.shadowColor="#78f7ff"; ctx.shadowBlur=20;
+  ctx.arc(px,py,16,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+}
+
+let last=performance.now();
+(function loop(t){ const dt=(t-last)/1000; last=t; step(dt); requestAnimationFrame(loop) })(last);
+</script>
