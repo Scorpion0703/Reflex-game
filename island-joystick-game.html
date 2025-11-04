@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Island Game Test</title>
+<style>
+body,html{margin:0;padding:0;overflow:hidden;background:#89c78a;font-family:sans-serif;}
+#joystick{
+position:fixed;bottom:30px;left:30px;
+width:140px;height:140px;border-radius:50%;
+background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);
+border:2px solid rgba(255,255,255,0.4);
+}
+#stick{
+position:absolute;left:45px;top:45px;
+width:50px;height:50px;border-radius:50%;background:white;
+}
+</style>
+</head>
+<body>
+
+<div id="joystick">
+  <div id="stick"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+// 3D Szene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x88cc88);
+
+const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,1000);
+camera.position.set(0,5,8);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Licht
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,5);
+scene.add(light);
+
+// Boden
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100,100),
+  new THREE.MeshPhongMaterial({color:0x7cb66d})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// Character
+const player = new THREE.Mesh(
+  new THREE.BoxGeometry(1,1.5,1),
+  new THREE.MeshPhongMaterial({color:0xff6666})
+);
+player.position.y = 0.75;
+scene.add(player);
+
+// Joystick logic
+let joy = document.getElementById("joystick");
+let stick = document.getElementById("stick");
+let joyActive = false, joyX=0, joyY=0;
+
+joy.addEventListener("touchstart",()=>joyActive=true);
+joy.addEventListener("touchend",()=>{
+  joyActive=false;stick.style.left="45px";stick.style.top="45px";joyX=joyY=0;
+});
+joy.addEventListener("touchmove",(e)=>{
+  let r = joy.getBoundingClientRect();
+  let x = e.touches[0].clientX - (r.left + 70);
+  let y = e.touches[0].clientY - (r.top + 70);
+  const dist = Math.min(40, Math.hypot(x,y));
+  const angle = Math.atan2(y,x);
+  joyX = Math.cos(angle) * (dist/40);
+  joyY = Math.sin(angle) * (dist/40);
+  stick.style.left = 45 + joyX*40 + "px";
+  stick.style.top = 45 + joyY*40 + "px";
+});
+
+// Loop
+function animate(){
+  requestAnimationFrame(animate);
+
+  // Bewegung
+  player.position.x += joyX * 0.1;
+  player.position.z += joyY * 0.1;
+
+  camera.position.x = player.position.x + 5;
+  camera.position.z = player.position.z + 8;
+  camera.lookAt(player.position);
+
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>
