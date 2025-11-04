@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Mind Dash • V4</title>
+<meta name="theme-color" content="#0b0f1e">
+
+<style>
+/* =========== THEME / GLOBAL =========== */
+:root{
+  --bg:#0b0f1e;
+  --glass:rgba(255,255,255,.08);
+  --line:rgba(255,255,255,.12);
+  --text:#eef3ff;
+  --muted:#a7b2c6;
+  --ok:#2ecc71; --bad:#ff5c5c; --accent:#7cf8ff;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+html{-webkit-text-size-adjust:100%} /* kein iOS Auto-Zoom */
+body{
+  margin:0; color:var(--text); font:16px/1.45 system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  /* Canvas-Hintergrund liegt darunter; body selbst schwarz/transp. */
+  background:#070b18;
+}
+
+/* =========== APP LAYOUT (fit-to-screen) =========== */
+.wrapper{
+  min-height:100svh;                    /* volle Höhe inkl. iOS Safe Areas */
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  display:grid; place-items:center; position:relative;
+}
+#bg{position:fixed; inset:0; z-index:-2; display:block}
+.bg-glow{position:fixed; inset:-20%; filter:blur(60px) saturate(120%); z-index:-1; opacity:.9; pointer-events:none}
+
+/* Card „Glas“-Look */
+.app{
+  width:min(1000px, 100%);
+  background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+  backdrop-filter:blur(14px) saturate(120%);
+  border:1px solid var(--line); border-radius:20px;
+  box-shadow:0 24px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06);
+  padding:18px;
+  display:grid; gap:14px; grid-template-columns:360px 1fr;
+}
+
+/* Mobile: 1 Spalte – NICHT reinzoomen */
+@media (max-width: 920px){
+  .app{grid-template-columns:1fr}
+}
+
+/* Head */
+h1{margin:0 0 4px; font-size:28px; letter-spacing:.2px}
+.sub{color:var(--muted)}
+.pill{display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid var(--line); margin-left:8px; color:#cfe3ff}
+
+/* Controls / Inputs */
+.controls{display:grid; gap:10px}
+.row{display:flex; gap:10px; flex-wrap:wrap}
+input,select,button{
+  font-size:16px; /* >=16px verhindert iOS-Fokus-Zoom */
+  appearance:none; border:1px solid var(--line); background:rgba(8,12,26,.8); color:var(--text);
+  padding:10px 12px; border-radius:12px; font-weight:600; letter-spacing:.2px
+}
+button.primary{background:linear-gradient(180deg,#2239a2,#152769); border-color:#2d49bd; box-shadow:0 6px 24px rgba(45,73,189,.35)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.6; cursor:not-allowed}
+
+/* Stats */
+.statgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+.stat{background:rgba(8,12,26,.6); border:1px solid var(--line); border-radius:12px; padding:10px 12px}
+.stat b{display:block; font-size:18px}
+
+/* Stage */
+.stage{
+  grid-column:1/-1; position:relative; border-radius:16px;
+  border:1px solid var(--line); background:rgba(5,10,25,.6); overflow:hidden;
+  min-height:min(60svh, 560px); /* passt immer in den Screen */
+  display:grid; place-items:center;
+}
+#fx{position:absolute; inset:0; pointer-events:none; z-index:1}
+.cardQ{z-index:2; display:grid; place-items:center; gap:14px; text-align:center}
+.question{
+  min-width:60%; padding:18px 22px; border-radius:14px;
+  font-size: clamp(22px, 4.2vmin, 36px);
+  background:rgba(9,14,34,.75); border:1px solid var(--line);
+  box-shadow:0 10px 34px rgba(0,0,0,.35)
+}
+.timer{
+  width:min(620px, 92%); height:12px; border-radius:999px;
+  background:rgba(8,12,26,.8); border:1px solid var(--line); overflow:hidden
+}
+.timer>div{
+  height:100%; width:100%;
+  background:linear-gradient(90deg, var(--ok), #97ffd2);
+  transform-origin:left center; transform:scaleX(1); transition:transform .05s linear
+}
+.actions{display:flex; gap:12px; justify-content:center}
+.actionBtn{
+  min-width:130px; padding:12px 16px; border-radius:12px; cursor:pointer; font-weight:800; font-size:18px;
+  border:1px solid var(--line); background:rgba(14,20,46,.9);
+  box-shadow:0 8px 28px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.06)
+}
+.true{background:linear-gradient(180deg,#134525,#0f2f1b)}
+.false{background:linear-gradient(180deg,#4b1320,#2c0d16)}
+
+/* Log modern */
+#log{
+  background:rgba(0,0,0,.25); border:1px solid var(--line); padding:12px; border-radius:10px;
+  height:170px; overflow:auto; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px;
+  color:#dde6f6; backdrop-filter:blur(8px)
+}
+.entry{display:flex; align-items:center; gap:10px; padding:6px 0; opacity:0; animation:fadeIn .25s forwards}
+.entry .dot{width:9px; height:9px; border-radius:50%; background:#4dd2a7; box-shadow:0 0 10px #4dd2a7}
+.entry.fail .dot{background:#ff6b6b; box-shadow:0 0 10px #ff6b6b}
+.entry.info .dot{background:#7cf8ff; box-shadow:0 0 10px #7cf8ff}
+@keyframes fadeIn{to{opacity:1}}
+
+/* Highscore list */
+#hsList .rowhs{display:flex; justify-content:space-between; gap:12px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.06)}
+#hsList .rowhs:nth-child(1){background:rgba(46,204,113,.08)} #hsList .rowhs:nth-child(2){background:rgba(124,248,255,.06)} #hsList .rowhs:nth-child(3){background:rgba(255,176,32,.06)}
+.pink{color:#ff6ad5; font-weight:800; cursor:pointer}
+.shake{animation:shake .25s} @keyframes shake{10%{transform:translateX(-4px)}20%{transform:translateX(4px)}40%{transform:translateX(-3px)}60%{transform:translateX(3px)}100%{transform:translateX(0)}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="bg-glow" id="bgGlow"></div>
+
+<div class="wrapper">
+  <div class="app" id="app">
+    <div>
+      <h1>Mind Dash <span class="pill">V4</span></h1>
+      <div class="sub">Schnell entscheiden. Neon-Look. Fließender Hintergrund.</div>
+
+      <div class="controls">
+        <div class="row">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="resetBtn">Reset</button>
+          <button id="openSettings">⚙️ Einstellungen</button>
+        </div>
+
+        <div class="statgrid">
+          <div class="stat"><b id="statRound">0/20</b><span>Runde</span></div>
+          <div class="stat"><b id="statScore">0</b><span>Punkte</span></div>
+          <div class="stat"><b id="statAvg">–</b><span>Ø Reaktion</span></div>
+        </div>
+
+        <div class="stat">
+          <b>Log</b>
+          <div id="log"></div>
+        </div>
+
+        <div class="stat">
+          <b>Highscore (dieses Gerät)</b>
+          <div class="row" style="margin:8px 0">
+            <input id="playerName" placeholder="Dein Name" maxlength="20" style="flex:1">
+            <button id="saveScoreBtn" class="primary">Score speichern</button>
+            <button id="clearHSBtn">Reset</button>
+          </div>
+          <div id="hsList" style="max-height:200px; overflow:auto; font-family:ui-monospace,monospace; font-size:13px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <canvas id="fx"></canvas>
+      <div class="cardQ">
+        <div id="q" class="question">Bereit?</div>
+        <div class="timer"><div id="bar"></div></div>
+        <div class="actions">
+          <button id="btnTrue"  class="actionBtn true">✅ Stimmt</button>
+          <button id="btnFalse" class="actionBtn false">❌ Falsch</button>
+        </div>
+        <div class="sub" id="hint">Tippe auf ✅ oder ❌ – du hast wenig Zeit!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Einstellungen (kompakt) -->
+<dialog id="settings" style="border:1px solid var(--line); background:rgba(8,12,26,.95); color:var(--text); border-radius:16px; padding:16px; width:min(560px,92vw)">
+  <button id="closeSettings" style="float:right">Schließen ✖</button>
+  <h3>⚙️ Einstellungen</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Runden</span><select id="optRounds"><option>10</option><option selected>20</option><option>30</option></select>
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Zeitschranke</span><input type="range" id="optTime" min="600" max="20000" value="1200" style="flex:1"><span id="timeLabel" style="margin-left:8px;opacity:.8">1.2s</span>
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Sounds</span><input type="checkbox" id="optSound" checked>
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Lautstärke</span><input type="range" id="optVol" min="0" max="100" value="70" style="flex:1">
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Partikel</span><input type="checkbox" id="optFx" checked>
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span>Partikel-Dichte</span><input type="range" id="optDensity" min="10" max="140" value="70" style="flex:1">
+    </label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:12px">
+      <span class="pink" id="luckyBtn">Lucky 🐱</span><span style="opacity:.6">tippen…</span>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(()=> {
+/* ===== Shortcuts ===== */
+const $ = s => document.querySelector(s);
+
+/* ===== Elements ===== */
+const q = $('#q'), bar = $('#bar'), logEl = $('#log'), hsBox = $('#hsList');
+const btnT = $('#btnTrue'), btnF = $('#btnFalse'), startBtn = $('#startBtn'), resetBtn = $('#resetBtn');
+const statRound = $('#statRound'), statScore = $('#statScore'), statAvg = $('#statAvg'), hint = $('#hint');
+const openSettings = $('#openSettings'), settingsDlg = $('#settings'), closeSettings = $('#closeSettings');
+const optRounds = $('#optRounds'), optTime = $('#optTime'), timeLabel = $('#timeLabel'), optSound = $('#optSound'), optVol = $('#optVol');
+const optFx = $('#optFx'), optDensity = $('#optDensity'), luckyBtn = $('#luckyBtn');
+const nameInput = $('#playerName'), saveScoreBtn = $('#saveScoreBtn'), clearHSBtn = $('#clearHSBtn');
+const fxC = $('#fx'), fx = fxC.getContext('2d'), stage = $('#stage');
+
+/* ===== State ===== */
+const S = { rounds:20, round:0, score:0, results:[], running:false, timeMs:1200, t0:0, timer:0,
+            sound:true, vol:.7, fx:true, density:70, best:null };
+try { Object.assign(S, JSON.parse(localStorage.getItem('md4')||'{}')); } catch {}
+optRounds.value = S.rounds; optTime.value = S.timeMs; optSound.checked = S.sound; optVol.value = Math.round(S.vol*100);
+optFx.checked = S.fx; optDensity.value = S.density; timeLabel.textContent = (S.timeMs/1000).toFixed(1)+'s';
+savePrefs();
+function savePrefs(){ localStorage.setItem('md4', JSON.stringify({rounds:S.rounds,timeMs:S.timeMs,sound:S.sound,vol:S.vol,fx:S.fx,density:S.density})); }
+
+/* ===== Utils ===== */
+const fmt = ms => `${ms.toFixed(0)} ms`;
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const ri = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
+function addLog(t,cls=''){const d=document.createElement('div'); d.className=`entry ${cls}`;
+  d.innerHTML = `<span class="dot"></span><span><strong>${t}</strong></span>`;
+  logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;}
+
+/* ===== Questions (Mix) ===== */
+const POOL=[{text:"5×4 = 20",isTrue:true},{text:"Montag kommt nach Mittwoch",isTrue:false},{text:"Gelb ist heller als Dunkelblau",isTrue:true},
+{text:"3 > 8",isTrue:false},{text:"Eine Katze hat 6 Beine",isTrue:false},{text:"Berlin ist die Hauptstadt von Deutschland",isTrue:true},
+{text:"1, 1, 2, 3, 5, ? → 8",isTrue:true},{text:"Spinnen sind Insekten",isTrue:false},{text:"Eine Stunde hat 60 Minuten",isTrue:true},
+{text:"Der Eiffelturm steht in Rom",isTrue:false},{text:"Sommer ist meist wärmer als Winter",isTrue:true},{text:"Schnee ist normalerweise weiß",isTrue:true}];
+function genMath(){const ops=["+","-","×"],a=ri(1,12),b=ri(1,12),op=pick(ops);
+  const c=op==="+"?a+b:op==="-"?a-b:a*b;const ok=Math.random()<.6;let s=ok?c:c+(Math.random()<.5?-1:1)*ri(1,3); if(!ok && s===c) s++;
+  return {text:`${a} ${op} ${b} = ${s}`, isTrue: ok};}
+function genFibo(){const seq=pick([[1,1,2,3,5,8],[2,3,5,8,13,21]]);const last=seq[5];const ok=Math.random()<.7;
+  const s=ok?last:last+(Math.random()<.5?-1:1)*ri(1,2);return {text:`${seq[0]}, ${seq[1]}, ${seq[2]}, ${seq[3]}, ${seq[4]}, ? → ${s}`,isTrue:ok};}
+function genFact(){const f=[["Der Nil ist ein Fluss",true],["Wasser kocht bei 50°C (Meereshöhe)",false],["Honig kann sehr lange haltbar sein",true],["Eine Minute hat 100 Sekunden",false],["Gold ist schwerer als Wasser",true]];
+  const [t,b]=pick(f);return {text:t,isTrue:b};}
+function genCompare(){const c=[["7 > 4",true],["12 < 5",false],["0 ist größer als 1",false],["100 ≥ 99",true]];const [t,b]=pick(c);return {text:t,isTrue:b};}
+function makeStatement(){const r=Math.random(); if(r<.35) return genMath(); if(r<.5) return genFibo(); if(r<.7) return genFact(); if(r<.8) return genCompare(); return pick(POOL);}
+
+/* ===== Animated background (soft blobs) ===== */
+const bg = document.getElementById('bg'); const bctx = bg.getContext('2d');
+function resizeBG(){ bg.width = innerWidth*devicePixelRatio; bg.height = innerHeight*devicePixelRatio; }
+addEventListener('resize', resizeBG, {passive:true}); resizeBG();
+const blobs=[...Array(5)].map(()=>({x:Math.random()*bg.width,y:Math.random()*bg.height,r:(150+Math.random()*200)*devicePixelRatio,dx:(Math.random()-.5)*0.6,dy:(Math.random()-.5)*0.6,
+c:`hsla(${Math.floor(Math.random()*360)},95%,60%,.55)`}));
+(function bgloop(){
+  bctx.clearRect(0,0,bg.width,bg.height);
+  bctx.globalCompositeOperation='lighter';
+  for(const p of blobs){
+    const g=bctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+    g.addColorStop(0,p.c); g.addColorStop(1,'transparent');
+    bctx.fillStyle=g; bctx.beginPath(); bctx.arc(p.x,p.y,p.r,0,Math.PI*2); bctx.fill();
+    p.x+=p.dx; p.y+=p.dy; if(p.x< -p.r||p.x>bg.width+p.r) p.dx*=-1; if(p.y< -p.r||p.y>bg.height+p.r) p.dy*=-1;
+  }
+  requestAnimationFrame(bgloop);
+})();
+
+/* ===== Particles (hits) ===== */
+function resizeFx(){ fxC.width=fxC.clientWidth*devicePixelRatio; fxC.height=fxC.clientHeight*devicePixelRatio; }
+new ResizeObserver(resizeFx).observe(fxC); resizeFx();
+const P=[]; function burst(kind='hit'){
+  if(!S.fx) return;
+  const r=q.getBoundingClientRect(), s=fxC.getBoundingClientRect();
+  const cx=(r.left+r.width/2 - s.left)*devicePixelRatio;
+  const cy=(r.top +r.height/2 - s.top )*devicePixelRatio;
+  const n=Math.round(S.density/3), col=kind==='hit'?'#2ecc71':(kind==='fail'?'#ff5c5c':'#ffb020');
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2, sp=1+Math.random()*3;
+    P.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.9+Math.random()*.5,r:(2+Math.random()*2)*devicePixelRatio,c:col});
+  }
+}
+(function fxloop(){
+  fx.clearRect(0,0,fxC.width,fxC.height);
+  for(let i=P.length-1;i>=0;i--){
+    const p=P[i]; p.life-=.016; if(p.life<=0){P.splice(i,1); continue;}
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.04;
+    fx.globalAlpha=Math.max(p.life,0);
+    fx.beginPath(); fx.arc(p.x,p.y,p.r,0,Math.PI*2); fx.fillStyle=p.c; fx.fill();
+  }
+  requestAnimationFrame(fxloop);
+})();
+
+/* ===== Better Sounds (weicher, kleine Akkorde) ===== */
+let AC = null;
+function tone(freq,type,dur=.18,vol=.2,detune=0){
+  const ctx=AC, t0=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain();
+  o.type=type; o.frequency.value=freq; o.detune.value=detune;
+  o.connect(g); g.connect(ctx.destination);
+  g.gain.value=0.0001;
+  g.gain.exponentialRampToValueAtTime(vol, t0+.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.start(t0); o.stop(t0+dur+.02);
+}
+function sfx(kind){
+  if(!S.sound) return;
+  try{
+    if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)();
+    const V = S.vol;
+    if(kind==='start'){ tone(440,'sine', .22, .22*V); tone(660,'sine', .22, .12*V, +3); }
+    if(kind==='ready'){ tone(740,'triangle', .16, .18*V); }
+    if(kind==='hit'){ tone(560,'square', .18, .22*V); tone(1120,'sine', .12, .12*V, +5); }
+    if(kind==='fail'){ tone(220,'sawtooth', .28, .26*V); }
+  }catch{}
+}
+
+/* ===== Game flow ===== */
+function updateStats(){ statRound.textContent=`${Math.min(S.round,S.rounds)}/${S.rounds}`; statScore.textContent=S.score; statAvg.textContent=S.results.length?fmt(avg(S.results)):'–'; }
+function start(){ S.round=0;S.score=0;S.results=[];S.running=true; addLog(`Start – ${S.rounds} Runden • Limit ${(S.timeMs/1000).toFixed(1)}s`,'info'); sfx('start'); next(); }
+function next(){
+  if(S.round>=S.rounds){ finish(); return; }
+  S.round++; updateStats();
+  const st=makeStatement(); q.textContent=st.text; sfx('ready');
+
+  const t0=performance.now(); S.t0=t0; bar.style.transform='scaleX(1)';
+  (function loop(){
+    const dt=performance.now()-t0, f=Math.max(0,1-dt/S.timeMs);
+    bar.style.transform=`scaleX(${f})`;
+    if(dt>=S.timeMs){ tooLate(); } else { S.timer=requestAnimationFrame(loop); }
+  })();
+
+  btnT.onclick=()=>respond(true,st);
+  btnF.onclick=()=>respond(false,st);
+}
+function respond(choice, st){
+  cancelAnimationFrame(S.timer);
+  const rt = performance.now()-S.t0;
+  const ok = (choice===st.isTrue);
+  if(ok){ S.score++; S.results.push(rt); addLog(`✔ Richtig • ${fmt(rt)}`); sfx('hit'); burst('hit'); }
+  else   { if(S.score>0) S.score--; addLog('✖ Falsch','fail'); sfx('fail'); burst('fail'); stage.classList.add('shake'); setTimeout(()=>stage.classList.remove('shake'),250); }
+  updateStats(); setTimeout(next, 600);
+}
+function tooLate(){ addLog('⏳ Zeit abgelaufen','fail'); sfx('fail'); burst('fail'); stage.classList.add('shake'); setTimeout(()=>stage.classList.remove('shake'),250); updateStats(); setTimeout(next,600); }
+function finish(){ S.running=false; addLog(`Ende • Score ${S.score} • Ø ${S.results.length?fmt(avg(S.results)):'–'}`,'info'); q.textContent='Fertig'; }
+
+/* ===== Local Highscore ===== */
+function loadHS(){ try{return JSON.parse(localStorage.getItem('md4_hs')||'[]')}catch{return[]} }
+function saveHS(l){ localStorage.setItem('md4_hs', JSON.stringify(l)); }
+function renderHS(){ const L=loadHS(); hsBox.innerHTML=L.length?'':'Noch keine Einträge.';
+  L.forEach((r,i)=>{const d=document.createElement('div'); d.className='rowhs';
+    d.innerHTML=`<span>#${i+1} • ${escapeHtml(r.name)} — Score ${r.score}</span><span>Ø ${r.avg.toFixed(0)} ms • Best ${r.best.toFixed(0)} ms</span>`;
+    hsBox.appendChild(d);
+  });
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+saveScoreBtn.onclick=()=>{ const name=(nameInput?.value||'Gast').slice(0,20); const avgMs=S.results.length?avg(S.results):0; const best=S.results.length?Math.min(...S.results):9999;
+  const L=loadHS(); L.push({name,score:S.score,avg:avgMs,best}); L.sort((a,b)=>b.score-a.score||a.avg-b.avg); saveHS(L.slice(0,10)); renderHS(); addLog(`⬆️ Score gespeichert für ${escapeHtml(name)}`,'info'); };
+clearHSBtn.onclick=()=>{ saveHS([]); renderHS(); };
+renderHS();
+
+/* ===== UI Bindings ===== */
+startBtn.onclick=()=>{ if(!S.running) start(); };
+resetBtn.onclick=()=>{ cancelAnimationFrame(S.timer); S.round=0; S.score=0; S.results=[]; S.running=false; bar.style.transform='scaleX(1)'; q.textContent='Bereit?'; logEl.innerHTML=''; updateStats(); };
+
+openSettings.onclick=()=>settingsDlg.showModal();
+closeSettings.onclick=()=>settingsDlg.close();
+optRounds.onchange=()=>{ S.rounds=Number(optRounds.value); savePrefs(); };
+optTime.oninput=()=>{ S.timeMs=Number(optTime.value); timeLabel.textContent=(S.timeMs/1000).toFixed(1)+'s'; savePrefs(); };
+optSound.onchange=()=>{ S.sound=optSound.checked; savePrefs(); };
+optVol.oninput=()=>{ S.vol=Number(optVol.value)/100; savePrefs(); };
+optFx.onchange=()=>{ S.fx=optFx.checked; savePrefs(); };
+optDensity.oninput=()=>{ S.density=Number(optDensity.value); savePrefs(); };
+
+/* Easter Egg */
+let lucky=0; luckyBtn.onclick=()=>{ lucky++; addLog('✨ Lucky 🐱 – Bonus aktiv!','info');
+  document.body.animate([{filter:'hue-rotate(0deg)'},{filter:'hue-rotate(25deg)'},{filter:'hue-rotate(0)'}],{duration:600});
+  if(lucky<=3){ const _resp=respond; respond=function(c,st){ const before=S.score; _resp(c,st); if(S.score>before){ S.score++; addLog('🍀 Lucky Bonus +1'); updateStats(); } respond=_resp; }; }
+};
+
+/* Init */
+function onResize(){ // verhindert „rein-gezoomt“-Gefühl
+  document.documentElement.style.setProperty('--vh', innerHeight * 0.01 + 'px');
+}
+addEventListener('resize', onResize, {passive:true}); onResize();
+updateStats();
+
+})();</script>
+</body>
+</html>
