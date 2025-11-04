@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Island Hero • LITE Compat</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#86c98c;touch-action:none;overscroll-behavior:none;font-family:system-ui}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:fixed;left:10px;top:10px;z-index:20;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:6px 10px;border-radius:10px;backdrop-filter:blur(8px);font-size:14px}
+  #hud b{font-weight:700}
+  /* Floating Joystick */
+  #joyBase,#joyKnob{position:fixed;border-radius:50%;pointer-events:none;z-index:15;opacity:0;transition:opacity .08s}
+  #joyBase{width:160px;height:160px;border:2px solid rgba(124,248,255,.45);background:rgba(124,248,255,.10);backdrop-filter:blur(6px);transform:translate(-50%,-50%)}
+  #joyKnob{width:90px;height:90px;border:2px solid rgba(124,248,255,.9);background:rgba(124,248,255,.28);backdrop-filter:blur(8px);transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+<div id="hud">🟡 <b id="score">0</b> • Links: Joystick • Rechts: Kamera</div>
+<div id="joyBase"></div><div id="joyKnob"></div>
+<canvas id="c"></canvas>
+
+<!-- Klassische Three.js-Build (kein ES-Module) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===== Renderer / Scene ===== */
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x86c98c);
+
+/* Lights */
+scene.add(new THREE.HemisphereLight(0xc9f7ff,0x316644,1.0));
+const sun=new THREE.DirectionalLight(0xffffff,0.9); sun.position.set(8,12,6); scene.add(sun);
+
+/* Camera + simple orbit */
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,600);
+camera.position.set(0,6,14);
+
+/* Minimal eigener Orbit (damit kein Modul nötig ist) */
+let rotX=0, rotY=0, dragging=false, lastX=0,lastY=0;
+function lookAtTarget(){
+  const tx=hero.position.x, ty=1.4, tz=hero.position.z;
+  const dist=12;
+  const cx = tx + Math.cos(rotX)*Math.cos(rotY)*dist;
+  const cy = ty + Math.sin(rotY)*dist + 4;
+  const cz = tz + Math.sin(rotX)*Math.cos(rotY)*dist;
+  camera.position.set(cx,cy,cz);
+  camera.lookAt(tx,ty,tz);
+}
+canvas.addEventListener('pointerdown',e=>{ if(e.clientX>innerWidth*0.6){ dragging=true; lastX=e.clientX; lastY=e.clientY; }});
+canvas.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  rotX += dx*0.005; rotY = Math.max(-1.0, Math.min(0.8, rotY - dy*0.005));
+});
+canvas.addEventListener('pointerup',()=>dragging=false);
+canvas.addEventListener('pointercancel',()=>dragging=false);
+
+/* Ground + sichtbares Raster */
+const ground=new THREE.Mesh(new THREE.CircleGeometry(110,64),
+  new THREE.MeshStandardMaterial({color:0x78bd70,roughness:0.95,metalness:0}));
+ground.rotation.x=-Math.PI/2; scene.add(ground);
+const grid=new THREE.GridHelper(200,40,0xffffff,0xffffff);
+grid.rotation.y = Math.PI/4; grid.material.opacity=0.12; grid.material.transparent=true; grid.position.y=0.01; scene.add(grid);
+
+/* Placeholder-Spieler (sichtbar & animierbar) */
+const hero=new THREE.Group(); scene.add(hero);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.6,1.2,8,12), new THREE.MeshStandardMaterial({color:0x6f5df6,roughness:0.35}));
+body.position.y=1.4;
+const head=new THREE.Mesh(new THREE.SphereGeometry(0.48,20,20), new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.4}));
+head.position.y=2.45;
+const legL=new THREE.Mesh(new THREE.CapsuleGeometry(0.2,0.9,6,10), new THREE.MeshStandardMaterial({color:0x2d2d2d}));
+const legR=legL.clone(); legL.position.set(0.26,0.45,0); legR.position.set(-0.26,0.45,0);
+const armL=new THREE.Mesh(new THREE.CapsuleGeometry(0.16,0.7,6,10), new THREE.MeshStandardMaterial({color:0x403a3a}));
+const armR=armL.clone(); armL.position.set(0.62,1.5,0); armR.position.set(-0.62,1.5,0);
+hero.add(body,head,legL,legR,armL,armR);
+
+/* Joystick (floating links) */
+const JOY_MAX=70;
+const joyBase=document.getElementById('joyBase');
+const joyKnob=document.getElementById('joyKnob');
+let joyActive=false,joyId=null,joyCX=0,joyCY=0,jx=0,jy=0;
+function showJoy(x,y){ joyBase.style.left=x+'px'; joyBase.style.top=y+'px'; joyKnob.style.left=x+'px'; joyKnob.style.top=y+'px'; joyBase.style.opacity=1; joyKnob.style.opacity=1; }
+function hideJoy(){ joyBase.style.opacity=0; joyKnob.style.opacity=0; }
+function setJoy(cx,cy,x,y){ const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),a=Math.atan2(dy,dx),r=Math.min(JOY_MAX,d);
+  joyKnob.style.left=(cx+Math.cos(a)*r)+'px'; joyKnob.style.top=(cy+Math.sin(a)*r)+'px';
+  jx=(d<8)?0:dx/JOY_MAX; jy=(d<8)?0:dy/JOY_MAX; }
+addEventListener('touchstart',e=>{ for(const t of e.changedTouches){ if(joyActive) continue; if(t.clientX>innerWidth*0.6) continue;
+  joyActive=true; joyId=t.identifier; joyCX=t.clientX; joyCY=t.clientY; showJoy(joyCX,joyCY); setJoy(joyCX,joyCY,t.clientX,t.clientY); e.preventDefault(); }},{passive:false});
+addEventListener('touchmove',e=>{ if(!joyActive) return; for(const t of e.changedTouches){ if(t.identifier===joyId){ setJoy(joyCX,joyCY,t.clientX,t.clientY); e.preventDefault(); } }},{passive:false});
+function endJoy(id){ if(joyId!==id) return false; joyActive=false; joyId=null; jx=jy=0; hideJoy(); return true; }
+addEventListener('touchend',e=>{ for(const t of e.changedTouches){ if(endJoy(t.identifier)) e.preventDefault(); } },{passive:false});
+addEventListener('touchcancel',e=>{ for(const t of e.changedTouches){ if(endJoy(t.identifier)) e.preventDefault(); } },{passive:false});
+
+/* Keyboard fallback */
+const keys={}; addEventListener('keydown',e=>keys[e.code]=true); addEventListener('keyup',e=>keys[e.code]=false);
+
+/* Movement + simple anim */
+let vx=0,vz=0,walkPhase=0; const ACC=40,SPEED_WALK=3.6,SPEED_RUN=6.6;
+function moveVec(){
+  // einfache Kamera-orientierte Steuerung (aus camera -> yaw)
+  const dirZ=new THREE.Vector3(); camera.getWorldDirection(dirZ); dirZ.y=0; dirZ.normalize();
+  const dirX=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),dirZ).normalize();
+  let ax=(keys['KeyD']||keys['ArrowRight']?1:0)-(keys['KeyA']||keys['ArrowLeft']?1:0);
+  let az=(keys['KeyW']||keys['ArrowUp']?1:0)-(keys['KeyS']||keys['ArrowDown']?1:0);
+  if(joyActive){ ax=jx; az=-jy; }
+  const v=new THREE.Vector3();
+  if(ax||az){ v.addScaledVector(dirX,ax); v.addScaledVector(dirZ,az); v.normalize(); }
+  return v;
+}
+
+function update(dt){
+  const dir=moveVec();
+  const mag=Math.hypot(jx,jy);
+  const target = (mag>0.7 || keys['ShiftLeft'])?SPEED_RUN:SPEED_WALK;
+  const tx=dir.x*target, tz=dir.z*target;
+  vx+=(tx-vx)*Math.min(1,ACC*dt); vz+=(tz-vz)*Math.min(1,ACC*dt);
+  hero.position.x+=vx*dt; hero.position.z+=vz*dt;
+
+  const sp=Math.hypot(vx,vz);
+  if(sp>0.02){ const yaw=Math.atan2(vz,vx); hero.rotation.y=-yaw+Math.PI/2; }
+
+  // simple walk swing
+  const speedNorm=Math.min(1, sp/SPEED_RUN);
+  walkPhase += speedNorm*9*dt*Math.PI;
+  const swing=Math.sin(walkPhase)*0.6*speedNorm;
+  legL.rotation.x= swing; legR.rotation.x=-swing;
+  armL.rotation.x=-swing*0.7; armR.rotation.x=swing*0.7;
+  body.position.y=1.4+Math.abs(Math.sin(walkPhase))*0.05*speedNorm;
+  head.position.y=2.45+Math.abs(Math.sin(walkPhase+0.6))*0.05*speedNorm;
+
+  lookAtTarget();
+}
+
+/* Resize + Loop */
+addEventListener('resize',()=>{ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); });
+let last=performance.now();
+(function loop(t){ const dt=Math.min(0.033,(t-last)/1000); last=t; update(dt); renderer.render(scene,camera); requestAnimationFrame(loop); })(last);
+</script>
+</body>
+</html>
