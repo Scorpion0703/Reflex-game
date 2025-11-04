@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mind Dash • V3</title>
+<meta name="theme-color" content="#0f1220">
+<style>
+:root{--bg:#0f1220;--panel:#151a2f;--muted:#9aa4b2;--ok:#2ecc71;--warn:#ffb020;--bad:#ff5c5c;--accent:#6ee7ff}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:radial-gradient(1300px 800px at 70% -10%,#1a1f3d 0%,var(--bg) 60%);color:#e8eef7;font:16px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
+.app{width:min(980px,100%);background:linear-gradient(180deg,#171c34 0%,var(--panel) 100%);border:1px solid #1f2747;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45);padding:18px;display:grid;gap:14px;grid-template-columns:340px 1fr;position:relative}
+h1{margin:0 0 4px;font-size:28px}.sub{color:var(--muted)}
+.pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #2a3565;margin-left:8px;color:#b8c3d6}
+.controls{display:grid;gap:10px}.row{display:flex;gap:10px;flex-wrap:wrap}
+select,button,input[type="range"],input[type="text"]{appearance:none;border:1px solid #273157;background:#0f1430;color:#e8eef7;padding:10px 12px;border-radius:12px;font-weight:600;letter-spacing:.2px}
+button.primary{background:linear-gradient(180deg,#1d2a67,#122055);border-color:#2c3c7c}button:disabled{opacity:.6;cursor:not-allowed}
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#0f1430;border:1px solid #1f2747;padding:10px 12px;border-radius:12px}.stat b{display:block;font-size:18px;margin-bottom:2px}
+.stage{grid-column:1/-1;position:relative;min-height:430px;border-radius:16px;border:1px dashed #26305a;background:#0e1227;overflow:hidden;display:grid;place-items:center}
+#fx{position:absolute;inset:0;pointer-events:none;z-index:1}
+.cardQ{z-index:2;display:grid;place-items:center;gap:12px;text-align:center}
+.question{min-width:60%;padding:18px 22px;border-radius:14px;font-size:clamp(22px,4.2vmin,36px);background:#0f1430;border:1px solid #25315f;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.timer{width:min(560px,92%);height:12px;background:#0b1130;border:1px solid #22305c;border-radius:999px;overflow:hidden;margin:6px auto 0}
+.timer>div{height:100%;width:100%;background:linear-gradient(90deg,var(--ok),#65f0c0);transform-origin:left center;transform:scaleX(1);transition:transform .05s linear}
+.actions{display:flex;gap:12px;justify-content:center}
+.actionBtn{min-width:120px;padding:12px 16px;border-radius:12px;font-weight:800;font-size:18px;cursor:pointer;border:1px solid #2a3565;background:#111846;transition:transform .12s ease,background .2s}
+.actionBtn:active{transform:scale(.98)}.true{background:#12381f;border-color:#1c5c33}.false{background:#3a1420;border-color:#6a2036}
+#log{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);padding:12px;border-radius:10px;height:170px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:#d1d9e6;backdrop-filter:blur(8px);box-shadow:inset 0 0 10px rgba(0,0,0,.2)}
+.entry{display:flex;align-items:center;gap:10px;padding:6px 0;opacity:0;animation:fadeIn .25s forwards}
+.entry .dot{width:9px;height:9px;border-radius:50%;background:#4dd2a7;box-shadow:0 0 8px #4dd2a7}
+.entry.fail .dot{background:#ff6b6b;box-shadow:0 0 8px #ff6b6b}
+.entry.info .dot{background:#6ee7ff;box-shadow:0 0 8px #6ee7ff}
+.entry strong{color:#fff}
+@keyframes fadeIn{to{opacity:1}}
+.settingsBtn{margin-left:8px;border-radius:12px}
+dialog#settings{border:1px solid #2a3565;background:#0f1430;color:#e8eef7;border-radius:16px;padding:16px 16px 8px;width:min(560px,92vw)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rowline{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0b112b;border:1px solid #1f2747;padding:10px 12px;border-radius:12px}
+.range{flex:1}
+.pink{color:#ff6ad5;font-weight:800;cursor:pointer}
+.shake{animation:shake .25s}@keyframes shake{10%{transform:translateX(-4px)}20%{transform:translateX(4px)}40%{transform:translateX(-3px)}60%{transform:translateX(3px)}100%{transform:translateX(0)}}
+#hsList .rowhs{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)}
+#hsList .rowhs:nth-child(1){background:rgba(46,204,113,.08)}#hsList .rowhs:nth-child(2){background:rgba(110,231,255,.06)}#hsList .rowhs:nth-child(3){background:rgba(255,176,32,.06)}
+</style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div>
+      <h1>Mind Dash <span class="pill">V3</span></h1>
+      <div class="sub">Stimmt die Aussage? Entscheide schnell.</div>
+
+      <div class="controls">
+        <div class="row">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="resetBtn">Reset</button>
+          <button id="openSettings" class="settingsBtn">⚙️ Einstellungen</button>
+        </div>
+
+        <div class="statgrid">
+          <div class="stat"><b id="statRound">0/20</b><span>Runde</span></div>
+          <div class="stat"><b id="statScore">0</b><span>Punkte</span></div>
+          <div class="stat"><b id="statAvg">–</b><span>Ø Reaktion</span></div>
+        </div>
+
+        <div class="stat">
+          <b>Log</b>
+          <div id="log"></div>
+        </div>
+
+        <div class="stat">
+          <b>Highscore (dieses Gerät)</b>
+          <div class="row" style="margin:8px 0">
+            <input id="playerName" placeholder="Dein Name" maxlength="20" style="flex:1">
+            <button id="saveScoreBtn" class="primary">Score speichern</button>
+            <button id="clearHSBtn">Reset</button>
+          </div>
+          <div id="hsList" style="max-height:200px;overflow:auto;font-family:ui-monospace,monospace;font-size:13px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <canvas id="fx"></canvas>
+      <div class="cardQ">
+        <div id="q" class="question">Bereit?</div>
+        <div class="timer"><div id="bar"></div></div>
+        <div class="actions">
+          <button id="btnTrue"  class="actionBtn true">✅ Stimmt</button>
+          <button id="btnFalse" class="actionBtn false">❌ Falsch</button>
+        </div>
+        <div class="sub" id="hint">Tippe auf ✅ oder ❌ – du hast wenig Zeit!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Einstellungen -->
+  <dialog id="settings">
+    <button id="closeSettings" class="settingsBtn" style="float:right">Schließen ✖</button>
+    <h3>⚙️ Einstellungen</h3>
+    <div class="grid2">
+      <div class="rowline"><span>Runden</span><select id="optRounds"><option>10</option><option selected>20</option><option>30</option></select></div>
+      <div class="rowline"><span>Zeitschranke</span>
+        <input type="range" id="optTime" class="range" min="600" max="20000" value="1200">
+        <span id="timeLabel" style="margin-left:8px;opacity:.8">1.2s</span>
+      </div>
+      <div class="rowline"><span>Sounds</span><label><input type="checkbox" id="optSound" checked> an</label></div>
+      <div class="rowline"><span>Lautstärke</span><input type="range" id="optVol" class="range" min="0" max="100" value="65"></div>
+      <div class="rowline"><span>Partikel</span><label><input type="checkbox" id="optFx" checked> an</label></div>
+      <div class="rowline"><span>Partikel-Dichte</span><input type="range" id="optDensity" class="range" min="10" max="120" value="60"></div>
+      <div class="rowline"><span class="pink" id="luckyBtn">Lucky 🐱</span><span style="opacity:.6">tippen…</span></div>
+    </div>
+  </dialog>
+
+<script>
+(()=>{
+// ---------- Elements
+const q=$('#q'), bar=$('#bar'), logEl=$('#log'), hsList=$('#hsList'), stage=$('#stage'), fxC=$('#fx'), ctx=fxC.getContext('2d');
+const btnT=$('#btnTrue'), btnF=$('#btnFalse'), startBtn=$('#startBtn'), resetBtn=$('#resetBtn');
+const statRound=$('#statRound'), statScore=$('#statScore'), statAvg=$('#statAvg'), hint=$('#hint');
+const openSettings=$('#openSettings'), settingsDlg=$('#settings'), closeSettings=$('#closeSettings');
+const optRounds=$('#optRounds'), optTime=$('#optTime'), timeLabel=$('#timeLabel'), optSound=$('#optSound'), optVol=$('#optVol');
+const optFx=$('#optFx'), optDensity=$('#optDensity'), luckyBtn=$('#luckyBtn'), nameInput=$('#playerName');
+const saveScoreBtn=$('#saveScoreBtn'), clearHSBtn=$('#clearHSBtn');
+
+// ---------- State
+const S={rounds:20,round:0,score:0,results:[],running:false,timeMs:1200,t0:0,timer:0,sound:true,vol:.65,fx:true,density:60,best:null};
+try{Object.assign(S,JSON.parse(localStorage.getItem('md3')||'{}'));}catch{}
+optRounds.value=S.rounds; optTime.value=S.timeMs; optSound.checked=S.sound; optVol.value=Math.round(S.vol*100);
+optFx.checked=S.fx; optDensity.value=S.density; timeLabel.textContent=(S.timeMs/1000).toFixed(1)+'s';
+savePrefs();
+
+function savePrefs(){localStorage.setItem('md3',JSON.stringify({rounds:S.rounds,timeMs:S.timeMs,sound:S.sound,vol:S.vol,fx:S.fx,density:S.density}))}
+
+// ---------- Helpers
+function $(id){return document.getElementById(id.replace('#',''))}
+const fmt=ms=>`${ms.toFixed(0)} ms`; const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0; const pick=a=>a[Math.floor(Math.random()*a.length)];
+function ri(a,b){return a+Math.floor(Math.random()*(b-a+1))}
+function addLog(msg,cls=''){const e=document.createElement('div');e.className=`entry ${cls}`;
+  e.innerHTML=`<span class="dot"></span><span><strong>${msg}</strong></span>`; logEl.appendChild(e); logEl.scrollTop=logEl.scrollHeight;}
+
+// ---------- Questions
+const POOL=[
+  {text:"5×4 = 20",isTrue:true},{text:"Montag kommt nach Mittwoch",isTrue:false},{text:"Gelb ist heller als Dunkelblau",isTrue:true},
+  {text:"3 > 8",isTrue:false},{text:"Eine Katze hat 6 Beine",isTrue:false},{text:"Berlin ist die Hauptstadt von Deutschland",isTrue:true},
+  {text:"1, 1, 2, 3, 5, ? → 8",isTrue:true},{text:"Spinnen sind Insekten",isTrue:false},{text:"Eine Stunde hat 60 Minuten",isTrue:true},
+  {text:"Der Eiffelturm steht in Rom",isTrue:false},{text:"Sommer ist meist wärmer als Winter",isTrue:true},{text:"Schnee ist normalerweise weiß",isTrue:true}
+];
+function genMath(){const ops=["+","-","×"],a=ri(1,12),b=ri(1,12),op=pick(ops);
+  const c=op==="+"?a+b:op==="-"?a-b:a*b;const isTrue=Math.random()<.6;let shown=isTrue?c:c+(Math.random()<.5?-1:1)*ri(1,3);if(!isTrue&&shown===c)shown++;
+  return {text:`${a} ${op} ${b} = ${shown}`,isTrue}}
+function genFibo(){const seq=pick([[1,1,2,3,5,8],[2,3,5,8,13,21]]);const last=seq[5];const isTrue=Math.random()<.7;
+  const shown=isTrue?last:last+(Math.random()<.5?-1:1)*ri(1,2);return {text:`${seq[0]}, ${seq[1]}, ${seq[2]}, ${seq[3]}, ${seq[4]}, ? → ${shown}`,isTrue}}
+function genFact(){const f=[["Der Nil ist ein Fluss",true],["Wasser kocht bei 50°C (Meereshöhe)",false],["Honig kann sehr lange haltbar sein",true],["Eine Minute hat 100 Sekunden",false],["Gold ist schwerer als Wasser",true]];
+  const [t,b]=pick(f);return {text:t,isTrue:b}}
+function genCompare(){const c=[["7 > 4",true],["12 < 5",false],["0 ist größer als 1",false],["100 ≥ 99",true]];const [t,b]=pick(c);return {text:t,isTrue:b}}
+function makeStatement(){const r=Math.random();if(r<.35)return genMath();if(r<.5)return genFibo();if(r<.7)return genFact();if(r<.8)return genCompare();return pick(POOL)}
+
+// ---------- FX
+function resizeFx(){fxC.width=fxC.clientWidth;fxC.height=fxC.clientHeight}new ResizeObserver(resizeFx).observe(fxC);resizeFx();
+const P=[];function burst(kind='hit'){if(!S.fx)return;const rect=q.getBoundingClientRect(),s=fxC.getBoundingClientRect();
+  const cx=rect.left+rect.width/2-s.left,cy=rect.top+rect.height/2-s.top,n=Math.round(S.density/4);const col=kind==='hit'?'#2ecc71':(kind==='fail'?'#ff5c5c':'#ffb020');
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=1+Math.random()*3;P.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.9+Math.random()*.5,r:2+Math.random()*2,c:col})}}
+function tick(){ctx.clearRect(0,0,fxC.width,fxC.height);for(let i=P.length-1;i>=0;i--){const p=P[i];p.life-=.016;if(p.life<=0){P.splice(i,1);continue}
+  p.x+=p.vx;p.y+=p.vy;p.vy+=.03;ctx.globalAlpha=Math.max(p.life,0);ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.c;ctx.fill()}requestAnimationFrame(tick)}requestAnimationFrame(tick);
+
+// ---------- Sound
+let AC=null;function sfx(type){if(!S.sound)return;try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();const T=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);g.gain.value=.0001;const V=S.vol;
+  function env(p=.15,d=.12){g.gain.setValueAtTime(.0001,T);g.gain.exponentialRampToValueAtTime(p*V,T+.02);g.gain.exponentialRampToValueAtTime(.0001,T+.02+d)}
+  if(type==='start'){o.type='sine';o.frequency.setValueAtTime(440,T);env(.15,.14)}
+  if(type==='ready'){o.type='triangle';o.frequency.setValueAtTime(740,T);env(.12,.12)}
+  if(type==='hit'){o.type='square';o.frequency.setValueAtTime(560,T);o.frequency.exponentialRampToValueAtTime(1200,T+.12);env(.18,.2)}
+  if(type==='fail'){o.type='sawtooth';o.frequency.setValueAtTime(260,T);o.frequency.exponentialRampToValueAtTime(120,T+.2);env(.22,.25)}
+  o.start();o.stop(T+.35)}catch{}}
+
+// ---------- Game flow
+function updateStats(){statRound.textContent=`${Math.min(S.round,S.rounds)}/${S.rounds}`;statScore.textContent=S.score;statAvg.textContent=S.results.length?fmt(avg(S.results)):'–'}
+function start(){S.round=0;S.score=0;S.results=[];S.running=true;addLog(`Start – ${S.rounds} Runden • Limit ${(S.timeMs/1000).toFixed(1)}s`,'info');sfx('start');next()}
+function next(){if(S.round>=S.rounds){finish();return}S.round++;updateStats();const st=makeStatement();q.textContent=st.text;sfx('ready');
+  const t0=performance.now();S.t0=t0;bar.style.transform='scaleX(1)';
+  (function loop(){const dt=performance.now()-t0,f=Math.max(0,1-dt/S.timeMs);bar.style.transform=`scaleX(${f})`;if(dt>=S.timeMs){tooLate()}else{S.timer=requestAnimationFrame(loop)}})();
+  btnT.onclick=()=>respond(true,st);btnF.onclick=()=>respond(false,st)}
+function respond(choice,st){cancelAnimationFrame(S.timer);const rt=performance.now()-S.t0;const ok=(choice===st.isTrue);
+  if(ok){S.score++;S.results.push(rt);addLog(`✔ Richtig • <strong>${fmt(rt)}</strong>`);sfx('hit');burst('hit')}
+  else{if(S.score>0)S.score--;addLog('✖ Falsch','fail');sfx('fail');burst('fail');stage.classList.add('shake');setTimeout(()=>stage.classList.remove('shake'),250)}
+  updateStats();setTimeout(next,600)}
+function tooLate(){addLog('⏳ Zeit abgelaufen','fail');sfx('fail');burst('fail');stage.classList.add('shake');setTimeout(()=>stage.classList.remove('shake'),250);updateStats();setTimeout(next,600)}
+function finish(){S.running=false;addLog(`Ende • Score ${S.score} • Ø ${S.results.length?fmt(avg(S.results)):'–'}`,'info');q.textContent='Fertig'}
+
+// ---------- Local Highscore (Top 10 am Gerät)
+function loadHS(){try{return JSON.parse(localStorage.getItem('md3_hs')||'[]')}catch{return[]}}
+function saveHS(list){localStorage.setItem('md3_hs',JSON.stringify(list))}
+function renderHS(){const list=loadHS();hsList.innerHTML=list.length?'':'Noch keine Einträge.';list.forEach((r,i)=>{const row=document.createElement('div');row.className='rowhs';
+  row.innerHTML=`<span>#${i+1} • ${escapeHtml(r.name)} — Score ${r.score}</span><span>Ø ${r.avg.toFixed(0)} ms • Best ${r.best.toFixed(0)} ms</span>`;hsList.appendChild(row)})}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+saveScoreBtn.onclick=()=>{const name=(nameInput.value||'Gast').slice(0,20);const avgMs=S.results.length?avg(S.results):0;const best=S.results.length?Math.min(...S.results):9999;
+  const list=loadHS();list.push({name,score:S.score,avg:avgMs,best});list.sort((a,b)=>b.score-a.score||a.avg-b.avg);saveHS(list.slice(0,10));renderHS();addLog(`⬆️ Score gespeichert für ${escapeHtml(name)}`,'info')}
+clearHSBtn.onclick=()=>{saveHS([]);renderHS()}
+renderHS();
+
+// ---------- UI bindings
+startBtn.onclick=()=>{if(!S.running)start()}
+resetBtn.onclick=()=>{cancelAnimationFrame(S.timer);S.round=0;S.score=0;S.results=[];S.running=false;bar.style.transform='scaleX(1)';q.textContent='Bereit?';logEl.innerHTML='';updateStats()}
+openSettings.onclick=()=>settingsDlg.showModal();closeSettings.onclick=()=>settingsDlg.close();
+optRounds.onchange=()=>{S.rounds=Number(optRounds.value);savePrefs()}
+optTime.oninput=()=>{S.timeMs=Number(optTime.value);timeLabel.textContent=(S.timeMs/1000).toFixed(1)+'s';savePrefs()}
+optSound.onchange=()=>{S.sound=optSound.checked;savePrefs()}
+optVol.oninput=()=>{S.vol=Number(optVol.value)/100;savePrefs()}
+optFx.onchange=()=>{S.fx=optFx.checked;savePrefs()}
+optDensity.oninput=()=>{S.density=Number(optDensity.value);savePrefs()}
+
+// Easter Egg: Lucky 🐱 (Bonuspunkt auf nächste richtige Antwort, max. 3x)
+let lucky=0; luckyBtn.onclick=()=>{lucky++; addLog('✨ Lucky 🐱 – Bonus aktiv!','info'); document.body.animate([{filter:'hue-rotate(0deg)'},{filter:'hue-rotate(25deg)'},{filter:'hue-rotate(0)'}],{duration:600});
+  if(lucky<=3){const _respond=respond; respond=function(c,st){const before=S.score; _respond(c,st); if(S.score>before){S.score++; addLog('🍀 Lucky Bonus +1'); updateStats()} respond=_respond}}
+}
+
+updateStats();
+})();
+</script>
+</body>
+</html>
